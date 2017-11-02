@@ -12,6 +12,9 @@ inputs:
   ansible_log_path:
     default: "/var/log/ansible.log"
 
+  ansible_role_java_repo:
+    default: "https://github.com/geerlingguy/ansible-role-java"
+
   ansible_role_jenkins_repo:
     default: "https://github.com/geerlingguy/ansible-role-jenkins"
 
@@ -127,6 +130,7 @@ node_templates:
         template_variables:
           hosts: ansible
           home_dir: { get_input: agent_user }
+          ansible_role_java: { get_input: ansible_role_java_repo }
           ansible_role_jenkins: { get_input: ansible_role_jenkins_repo }
           ansible_roles_path: { get_input: ansible_roles }
     relationships:
