@@ -1,0 +1,16 @@
+- hosts: {{ hosts }}
+  become: yes
+
+  tasks:
+
+    - name: Install base packages
+      yum:
+        name:
+          - git
+          - wget
+          - curl
+
+    - name: downloading ansible-role-jenkins
+      git:
+        repo: {{ ansible_role_jenkins }}
+        dest: "{{ ansible_roles_path }}/ansible-role-jenkins"

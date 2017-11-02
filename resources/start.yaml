@@ -1,0 +1,8 @@
+- hosts: {{ hosts }}
+  become: yes
+
+  tasks:
+    - name: start.yaml test
+      debug:
+        msg: "System {{ inventory_hostname }}"
+

@@ -1,0 +1,174 @@
+inputs:
+
+  ansible_private_key_file:
+    default: { concat: [ '/home/', { get_input: agent_user }, '/.ssh/agent.pem' ] }
+
+  ansible_inventory:
+    default: "/etc/ansible/inventory"
+
+  ansible_roles:
+    default: "/etc/ansible/roles"
+
+  ansible_log_path:
+    default: "/var/log/ansible.log"
+
+  ansible_role_jenkins_repo:
+    default: "https://github.com/geerlingguy/ansible-role-jenkins"
+
+data_types:
+
+  cloudify.datatypes.FileResource:
+    properties:
+      resource_path:
+        type: string
+        description: A path, relative to the root blueprint folder, of a file resource.
+        required: true
+      target_path:
+        type: string
+        description: A path to save the file on the target file system.
+        required: false
+      template_variables:
+        description: A dictionary of variables keys and values for rendering the file resource if templating is used.
+        required: false
+
+node_types:
+
+  cloudify.nodes.FileResource:
+    derived_from: cloudify.nodes.Root
+    properties:
+      resource_config:
+        type: cloudify.datatypes.FileResource
+        required: true
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: scripts/render.py
+
+
+  cloudify.nodes.ConfigFile:
+    derived_from: cloudify.nodes.Root
+    properties:
+      file_path:
+        type: string
+        required: true
+      resource_config:
+        default: {}
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: scripts/config.py
+
+  cloudify.nodes.RegularFile:
+    derived_from: cloudify.nodes.Root
+    properties:
+      resource_config:
+        default: {}
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: scripts/file.py
+
+node_templates:
+
+  ansible:
+      type: cloudify.nodes.Root
+      relationships:
+        - type: cloudify.relationships.contained_in
+          target: host
+        - type: cloudify.relationships.depends_on
+          target: main.yaml
+        - type: cloudify.relationships.depends_on
+          target: start.yaml
+        - type: cloudify.relationships.depends_on
+          target: key.pem
+      interfaces:
+        cloudify.interfaces.lifecycle:
+          create:
+            implementation: fabric.fabric_plugin.tasks.run_commands
+            inputs:
+              fabric_env: &fabric_env
+                host_string: { get_attribute: [ host, ip ] }
+                user: { get_input: agent_user }
+                key: { get_secret: agent_key_private }
+              commands:
+                - concat:
+                  - 'ansible-playbook '
+                  - { get_property: [ main.yaml, resource_config, target_path] }
+                  - ' --connection=paramiko'
+          start:
+            implementation: fabric.fabric_plugin.tasks.run_commands
+            inputs:
+              fabric_env: *fabric_env
+              commands:
+                - concat:
+                  - 'ansible-playbook '
+                  - { get_property: [ start.yaml, resource_config, target_path] }
+                  - ' --connection=paramiko'
+
+  start.yaml:
+    type: cloudify.nodes.FileResource
+    properties:
+      resource_config:
+        resource_path: resources/start.yaml
+        target_path: /etc/ansible/start.yaml
+        template_variables:
+          hosts: ansible
+          home_dir: { get_input: agent_user }
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+
+  main.yaml:
+    type: cloudify.nodes.FileResource
+    properties:
+      resource_config:
+        resource_path: resources/main.yaml
+        target_path: /etc/ansible/main.yaml
+        template_variables:
+          hosts: ansible
+          home_dir: { get_input: agent_user }
+          ansible_role_jenkins: { get_input: ansible_role_jenkins_repo }
+          ansible_roles_path: { get_input: ansible_roles }
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+
+  inventory:
+    type: cloudify.nodes.ConfigFile
+    properties:
+      file_path: /etc/ansible/inventory
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          inputs:
+            resource_config:
+              ansible:
+              - { get_attribute: [ host, ip ] }
+
+  ansible.cfg:
+    type: cloudify.nodes.ConfigFile
+    properties:
+      file_path: /etc/ansible/ansible.cfg
+      resource_config:
+        'defaults':
+          host_key_checking: False
+          private_key_file: { get_input: ansible_private_key_file }
+          inventory: { get_input: ansible_inventory }
+          log_path: { get_input: ansible_log_path }
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+
+  key.pem:
+    type: cloudify.nodes.RegularFile
+    properties:
+      resource_config:
+        file_path: { get_input: ansible_private_key_file }
+        file_content: { get_secret: agent_key_private }
+        file_permissions: '0600'
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
