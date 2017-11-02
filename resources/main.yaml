@@ -2,7 +2,6 @@
   become: yes
 
   tasks:
-
     - name: Install base packages
       yum:
         name:
@@ -10,7 +9,12 @@
           - wget
           - curl
 
+    - name: downloading ansible-role-java
+      git:
+        repo: {{ ansible_role_java }}
+        dest: {{ ansible_roles_path }}/geerlingguy.java
+
     - name: downloading ansible-role-jenkins
       git:
         repo: {{ ansible_role_jenkins }}
-        dest: "{{ ansible_roles_path }}/ansible-role-jenkins"
+        dest: {{ ansible_roles_path }}/geerlingguy.jenkins
